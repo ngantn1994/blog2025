@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -43,7 +45,17 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./vendor/bin/phpcs --report=checkstyle --standard=phpcsslevomat.xml . -q | reviewdog -name=PHPCS -f=checkstyle -reporter=github-pr-check -level=error -diff='git diff'
 
+      - name: Get changed PHP files
+        id: changed-php
+        shell: bash
+        run: |
+          git fetch --no-tags --prune --depth=1 origin ${{ github.event.pull_request.base.sha }}
+          git diff --name-only --diff-filter=AMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '\.php$' | tr -d '\r' > changed_files.txt || true
+          count=$(wc -l < changed_files.txt | tr -d ' ')
+          echo "count=$count" >> $GITHUB_OUTPUT
+
       - name: PHPStan
+        if: steps.changed-php.outputs.count != '0'
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: php ./vendor/bin/phpstan analyse . --memory-limit 1G --error-format=raw | reviewdog -name=PHPStan -f=phpstan -reporter=github-pr-check -level=error -diff='git diff'
+        run: php ./vendor/bin/phpstan analyse --paths-file=changed_files.txt --memory-limit 1G --error-format=raw | reviewdog -name=PHPStan -f=phpstan -reporter=github-pr-check -level=error -diff='git diff'
