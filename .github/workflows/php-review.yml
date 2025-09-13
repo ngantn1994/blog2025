@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -24,18 +26,17 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-progress --no-suggest
 
-      - name: Run PHPStan
-        run: |
-          if [ -f vendor/bin/phpstan ]; then
-            vendor/bin/phpstan analyse --memory-limit=1G
-          else
-            echo "PHPStan not installed. Skipping." && exit 1
-          fi
+      - name: Setup ReviewDog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
 
-      - name: Run PHPUnit
-        run: |
-          if [ -f vendor/bin/phpunit ]; then
-            vendor/bin/phpunit --testdox
-          else
-            echo "PHPUnit not installed. Skipping." && exit 1
-          fi
+      - name: PHPCS
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./vendor/bin/phpcs --report=checkstyle --standard=phpcsslevomat.xml . -q | reviewdog -name=PHPCS -f=checkstyle -reporter=github-pr-check -level=error -diff='git diff'
+
+      - name: PHPStan
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: php ./vendor/bin/phpstan analyse . --memory-limit 1G --error-format=raw | reviewdog -name=PHPStan -f=phpstan -reporter=github-pr-check -level=error -diff='git diff'
