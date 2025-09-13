@@ -1,0 +1,41 @@
+name: PHP Review
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  php-review:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: [8.4]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-suggest
+
+      - name: Run PHPStan
+        run: |
+          if [ -f vendor/bin/phpstan ]; then
+            vendor/bin/phpstan analyse --memory-limit=1G
+          else
+            echo "PHPStan not installed. Skipping." && exit 1
+          fi
+
+      - name: Run PHPUnit
+        run: |
+          if [ -f vendor/bin/phpunit ]; then
+            vendor/bin/phpunit --testdox
+          else
+            echo "PHPUnit not installed. Skipping." && exit 1
+          fi
